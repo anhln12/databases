@@ -1,0 +1,170 @@
+cat /etc/named.conf
+
+cat > /etc/named.conf <<EOF
+
+options {
+listen-on port 53 { 127.0.0.1; 172.16.10.111; };
+listen-on-v6 port 53 { ::1; };
+directory "/var/named";
+dump-file "/var/named/data/cache_dump.db";
+statistics-file "/var/named/data/named_stats.txt";
+memstatistics-file "/var/named/data/named_mem_stats.txt";
+secroots-file"/var/named/data/named.secroots";
+recursing-file"/var/named/data/named.recursing";
+allow-query     { localhost; 172.16.10.0/24; };
+
+recursion yes;
+
+dnssec-enable yes;
+dnssec-validation yes;
+
+managed-keys-directory "/var/named/dynamic";
+
+pid-file "/run/named/named.pid";
+session-keyfile "/run/named/session.key";
+
+/* https://fedoraproject.org/wiki/Changes/CryptoPolicy */
+};
+
+logging {
+        channel default_debug {
+                file "data/named.run";
+                severity dynamic;
+        };
+};
+
+zone "." IN {
+type hint;
+file "named.ca";
+};
+
+include "/etc/named.rfc1912.zones";
+include "/etc/named.root.key";
+
+//forward zone
+zone "racdomain.com" IN {
+     type master;
+     file "forward.racdomain.com";
+     allow-update { none; };
+     allow-query { any; };
+};
+
+//backward zone or reverse zone
+zone "10.16.172.in-addr.arpa" IN {
+     type master;
+     file "backward.racdomain.com";
+     allow-update { none; };
+     allow-query { any; };
+};
+
+EOF
+
+
+
+
+[root@rac1 ~]# cat /etc/hosts
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+#::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+
+# Public
+172.16.10.111 rac1.localdomain rac1
+172.16.10.112 rac2.localdomain rac2
+
+# Private
+172.16.12.111 rac1-priv.localdomain rac1-priv
+172.16.12.112 rac2-priv.localdomain rac2-priv
+
+# Virtual
+172.16.10.113 rac1-vip.localdomain rac1-vip
+172.16.10.114 rac2-vip.localdomain rac2-vip
+
+# SCAN
+172.16.10.115 rac-scan.localdomain rac-scan
+172.16.10.116 rac-scan.localdomain rac-scan
+172.16.10.117 rac-scan.localdomain rac-scan
+
+# DNS
+
+[root@prod-ast-bss-db02 anhle4]# cat /var/named/forward.racdomain.com
+$TTL 86400
+@ IN SOA rac1.racdomain.com. admin.racdomain.com. (
+                                                2021040300 ;Serial
+                                                3600 ;Refresh
+                                                1800 ;Retry
+                                                604800 ;Expire
+                                                86400 ;Minimum TTL
+)
+
+;Name Server Information
+@ IN NS rac1.racdomain.com.
+@ IN A  172.16.10.111
+@ IN A  172.16.10.112
+@ IN A  172.16.10.113
+@ IN A  172.16.10.114
+@ IN A  172.16.10.115
+@ IN A  172.16.10.116
+@ IN A  172.16.10.117
+
+;IP Address for Name Server
+prod-ast-bss-db02 IN A 172.16.10.111
+
+;Mail Server MX (Mail exchanger) Record
+;prod-ast-bss-db02.racdomain.com IN MX 10 mail.prod-ast-bss-db02.racdomain.com
+
+;A Record for the following Host name
+rac1  IN   A   172.16.10.111
+rac2  IN   A   172.16.10.112
+rac1-vip  IN  A  172.16.10.113
+rac2-vip  IN  A  172.16.10.114
+rac-scan  IN  A  172.16.10.115
+rac-scan  IN  A  172.16.10.116
+rac-scan  IN  A  172.16.10.117
+
+;CNAME Record
+;ftp  IN   CNAME ftp.rac1.racdomain.com.
+
+[root@prod-ast-bss-db02 anhle4]# cat /var/named/backward.racdomain.com
+$TTL 86400
+@ IN SOA rac1.racdomain.com. admin.racdomain.com. (
+                                            2021040300 ;Serial
+                                            3600 ;Refresh
+                                            1800 ;Retry
+                                            604800 ;Expire
+                                            86400 ;Minimum TTL
+)
+;Name Server Information
+@ IN NS rac1.racdomain.com.
+rac1     IN      A       172.16.10.111
+
+;Reverse lookup for Name Server
+112 IN PTR rac2.racdomain.com.
+
+;PTR Record IP address to Hostname
+111      IN      PTR     rac1.racdomain.com.
+112      IN      PTR     rac2.racdomain.com.
+113     IN      PTR     rac1-vip.racdomain.com
+114     IN      PTR     rac2-vip.racdomain.com
+115     IN      PTR     rac-scan.racdomain.com
+116     IN      PTR     rac-scan.racdomain.com
+117     IN      PTR     rac-scan.racdomain.com
+
+
+hostnamectl set-hostname rac1.racdomain.com
+hostnamectl set-hostname rac2.racdomain.com
+
+# Public
+172.16.10.111 rac1.racdomain.com rac1
+172.16.10.112 rac2.racdomain.com rac2
+
+# Private
+172.16.12.111 rac1-priv.racdomain.com rac1-priv
+172.16.12.112 rac2-priv.racdomain.com rac2-priv
+
+# Virtual
+172.16.10.113 rac1-vip.racdomain.com rac1-vip
+172.16.10.114 rac2-vip.racdomain.com rac2-vip
+
+# SCAN
+#172.16.10.115 rac-scan.racdomain.com rac-scan
+#172.16.10.116 rac-scan.racdomain.com rac-scan
+#172.16.10.117 rac-scan.racdomain.com rac-scan
