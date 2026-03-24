@@ -1,0 +1,111 @@
+grep -vE '^\s*(#|$)' 
+
+# Backup toàn bộ cluster 13
+pg_dumpall -U postgres > /var/backups/postgres13_full.sql
+
+systemctl stop postgresql@13-main
+
+
+apt install postgresql-16 -y
+
+1. Chuẩn bị thư mục mới cho PostgreSQL 16
+
+mkdir -p /data/postgresql/16/{main,archive,logs,wal_archive}
+chown -R postgres:postgres /data/postgresql/16
+chmod 700 /data/postgresql/16/main
+
+2. Init cluster 16
+
+pg_createcluster 16 main --datadir=/data/postgresql/16/main
+
+
+3. Stop dịch vụ PostgreSQL 13
+
+systemctl stop postgresql@13-main
+
+
+root@db-mysql-05:/etc/postgresql/13/main# sudo -u postgres /usr/lib/postgresql/16/bin/pg_upgrade \
+  -b /usr/lib/postgresql/13/bin \
+  -B /usr/lib/postgresql/16/bin \
+  -d /data/postgresql/13/main \
+  -D /data/postgresql/16/main \
+  -U postgres \
+  --socketdir=/tmp \
+  -o "-c config_file=/etc/postgresql/13/main/postgresql.conf"
+Performing Consistency Checks
+-----------------------------
+Checking cluster versions                                     ok
+Checking database user is the install user                    ok
+Checking database connection settings                         ok
+Checking for prepared transactions                            ok
+Checking for system-defined composite types in user tables    ok
+Checking for reg* data types in user tables                   ok
+Checking for contrib/isn with bigint-passing mismatch         ok
+Checking for incompatible "aclitem" data type in user tables  ok
+Checking for user-defined encoding conversions                ok
+Checking for user-defined postfix operators                   ok
+Checking for incompatible polymorphic functions               ok
+Checking for not-null constraint inconsistencies              ok
+Creating dump of global objects                               ok
+Creating dump of database schemas                             
+                                                              ok
+Checking for presence of required libraries                   ok
+Checking database user is the install user                    ok
+Checking for prepared transactions                            ok
+Checking for new cluster tablespace directories               ok
+
+If pg_upgrade fails after this point, you must re-initdb the
+new cluster before continuing.
+
+Performing Upgrade
+------------------
+Setting locale and encoding for new cluster                   ok
+Analyzing all rows in the new cluster                         ok
+Freezing all rows in the new cluster                          ok
+Deleting files from new pg_xact                               ok
+Copying old pg_xact to new server                             ok
+Setting oldest XID for new cluster                            ok
+Setting next transaction ID and epoch for new cluster         ok
+Deleting files from new pg_multixact/offsets                  ok
+Copying old pg_multixact/offsets to new server                ok
+Deleting files from new pg_multixact/members                  ok
+Copying old pg_multixact/members to new server                ok
+Setting next multixact ID and offset for new cluster          ok
+Resetting WAL archives                                        ok
+Setting frozenxid and minmxid counters in new cluster         ok
+Restoring global objects in the new cluster                   ok
+Restoring database schemas in the new cluster                 
+                                                              ok
+Copying user relation files                                   
+                                                              ok
+Setting next OID for new cluster                              ok
+Sync data directory to disk                                   ok
+Creating script to delete old cluster                         ok
+Checking for extension updates                                ok
+
+Upgrade Complete
+----------------
+Optimizer statistics are not transferred by pg_upgrade.
+Once you start the new server, consider running:
+    /usr/lib/postgresql/16/bin/vacuumdb -U postgres --all --analyze-in-stages
+Running this script will delete the old cluster's data files:
+    ./delete_old_cluster.sh
+	
+	
+sudo -u postgres ./analyze_new_cluster.sh
+
+5. Sau khi upgrade thành công
+
+Sửa postgresql.conf của instance 16
+
+Khởi động Postgres 16:
+systemctl start postgresql@16-main
+
+Xác nhận:
+psql -U postgres -c "SELECT version();"
+
+
+slave:
+
+sudo -u postgres pg_basebackup -h 10.0.12.200 -p 5432 -U replication -D /data/postgresql/16/main/ -Fp -Xs -R -P -v --progress
+sudo -u postgres pg_basebackup -h 10.0.12.200 -p 5432 -U replication -D /data/postgresql/16/archive/ -Fp -Xs -R -P -v 
