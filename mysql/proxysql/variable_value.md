@@ -1,3 +1,4 @@
+```
 Admin>SELECT variable_name, variable_value
     -> FROM global_variables
     -> WHERE variable_name LIKE '%mysql-%'
@@ -203,3 +204,4 @@ Admin>SELECT variable_name, variable_value
 | mysql-zstd_compression_level                                         | 3                                          |
 +----------------------------------------------------------------------+--------------------------------------------+
 196 rows in set (0.01 sec)
+```
