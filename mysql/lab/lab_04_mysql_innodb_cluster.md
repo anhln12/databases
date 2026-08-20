@@ -23,9 +23,9 @@ Thực hiện trên cả 3 máy (VM01, VM02, VM03):
 
 ```
 /etc/hosts
-192.168.1.10 VM01
-192.168.1.20 VM02
-192.168.1.30 VM03
+192.168.1.10 server10-prod
+192.168.1.20 server11-prod
+192.168.1.30 server12-prod
 ```
 
 1.3 Cài dặt Mysql và Mysql Shell
@@ -87,6 +87,72 @@ PHẦN 3: THIẾT LẬP CLUSTER (Sử dụng MYSQL SHELL)
 MySQL Shell có tính năng tự động phát hiện lỗi cấu hình và sửa chúng (như server-id gtid_mode ...)
 
 Thực hiện lần lượt trên từng máy
+```
+mysqlsh
+shell.connect('clusteradmin@server10-prod:3306');
+dba.checkInstanceConfiguration('clusteradmin@server10-prod:3306');
+dba.configureInstance('clusteradmin@server10-prod:3306');
+```
+
+Hệ thống sẽ hỏi:
+```
+Do you want to perform the required configuration changes? [y/n]: y
+Do you want to restart the instance after configuring it? [y/n]: y
+```
+
+3.2 Khởi tạo Cluster
+
+Chúng ta sẽ biến VM01 thành máy chủ đầu tiên (Primary) của cụm
+
+1. Tại VM01 vào mysqlsh kết nối lại
+
+```
+mysqlsh
+\connect clusteradmin@server10-prod:3306
+var cluster = dba.createCluster('mycluster')
+cluster.status()
+```
+
+Bạn sẽ thấy chỉ có VM01 trong danh sách topology
+
+3.3 Thêm các Node vào Cluster
+
+Chúng ta sẽ thêm VM02 và VM03 vào cụm
+```
+cluster.addInstance('clusteradmin@server11-prod:3306', {recoveryMethod: 'clone'});
+cluster.addInstance('clusteradmin@server12-prod:3306', {recoveryMethod: 'clone'});
+```
+
+PHẦN 4: KIỂM TRA VÀ GIẢ LẬP SỤ CỐ (FAILOVER TEST)
+
+Đây là phần quan trọng nhất để chứng minh hệ thống High Availability hoạt động
+
+4.1 Kiểm tra trạng thái cluster
+
+Yêu cầu quan sát: Cả 3 máy VM01, 02, 03 đều có trạng thái Online
+Một máy có Role RW (Read/Writer - Primary) - Thường là VM01
+Hai máy còn lại là RO (Read Only - Secondary)
+
+4.2 Giả lập sự cố (Kill Master Node)
+Tắt nguồn hoặc stop service mysql
+
+4.3 Quan sát quá trình bàu chọn lại (Failover)
+Kết quả mong đợi:
+- VM01 sẽ có trạng thái Offline
+- Hệ thống tự động bầu chọn VM02 or VM03 lên làm Primary
+
+4.4. Khôi phục Node hỏng (Rejoin)
+```
+cluster.rejoinInstance('clusteradmin@server10-prod:3306')
+```
+
+Câu hỏi lý thuyết: Tạo sao trong môi trường Cluster, ta cần ít nhất 3 máy (số lẻ) thay vì 2 máy (Tìm hiểu về Split-brain và Quorum)
+
+
+
+
+
+
 
 
 
